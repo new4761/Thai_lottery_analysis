@@ -2,44 +2,51 @@ name: Update Thai Lottery Data
 
 on:
   schedule:
-    - cron: '0 8 3,17 * *'  # Runs at 15:00 Thailand time on 3rd and 17th
+    - cron: '0 8 3,17 * *'  # Run at 15:00 Thailand time on 3rd and 17th
   workflow_dispatch:
 
 jobs:
-  run-query:
+  update-lottery:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: 📦 Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: 🐍 Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run query.py (fetch lottery data)
+      - name: 📝 Run query.py (fetch data)
         run: python query.py
 
-      - name: Run query_locker.py (prepare Looker CSV)
+      - name: 🔁 Run query_locker.py (transform data)
         run: python query_locker.py
 
-      - name: Show generated files
+      - name: 🔍 Show outputs
         run: |
-          ls -lh
-          head -n 5 lottery_results.csv || echo "lottery_results.csv not found"
-          head -n 5 lottery_results_looker_ready.csv || echo "Looker CSV not found"
+          echo "📁 lottery_results.csv:"
+          head -n 5 lottery_results.csv
+          echo ""
+          echo "📁 lottery_results_looker_ready.csv:"
+          head -n 5 lottery_results_looker_ready.csv
 
-      - name: Commit and push updated files
+      - name: 🧾 Configure Git
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git pull --rebase origin main
+
+      - name: 🔄 Pull latest changes
+        run: git pull --rebase origin main
+
+      - name: ✅ Commit and push CSV updates
+        run: |
           git add lottery_results.csv lottery_results_looker_ready.csv
-          git commit -m "🤖 Update lottery results on $(date +'%Y-%m-%d')"
+          git commit -m "🤖 Update lottery results on $(date +'%Y-%m-%d')" || echo "No changes to commit"
           git push
