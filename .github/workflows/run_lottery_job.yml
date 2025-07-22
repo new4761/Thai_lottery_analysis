@@ -50,6 +50,6 @@ jobs:
 
       - name: 🚀 Update Google Sheets from GitHub CSVs
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
         run: |
           python update_sheet_from_github.py
