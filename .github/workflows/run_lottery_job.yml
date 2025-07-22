@@ -47,3 +47,9 @@ jobs:
           git commit -m "🤖 Update lottery results on $(date +'%Y-%m-%d')" || echo "No changes to commit"
           git pull --rebase origin main || echo "Nothing to rebase"
           git push
+
+      - name: 🚀 Update Google Sheets from GitHub CSVs
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+        run: |
+          python update_sheet_from_github.py
