@@ -24,27 +24,4 @@ jobs:
           pip install requests
 
       - name: Run query.py only if yesterday was draw date
-        run: |
-          python <<EOF
-import datetime
-from query import get_draw_dates, collect_all_data, save_to_csv
-
-yesterday = datetime.date.today() - datetime.timedelta(days=1)
-draw_dates = get_draw_dates()
-
-if yesterday in draw_dates:
-    print("✅ Yesterday was a draw date. Collecting data.")
-    data = collect_all_data()
-    save_to_csv(data)
-else:
-    print("⏭️ Yesterday was NOT a draw date. Skipping.")
-    exit(78)
-EOF
-
-      - name: Commit and push if CSV changed
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add lottery_results.csv
-          git diff --cached --quiet || git commit -m "🔄 Update lottery results (automated)"
-          git push
+        run: python query.py
