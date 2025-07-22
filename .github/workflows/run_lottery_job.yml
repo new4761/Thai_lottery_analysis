@@ -1,0 +1,50 @@
+name: Update Thai Lottery Data
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # Runs daily at 15:00 Thailand time
+  workflow_dispatch:      # Optional: allow manual trigger
+
+jobs:
+  run-query:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.10
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Run query.py only if yesterday was draw date
+        run: |
+          python <<EOF
+import datetime
+from query import get_draw_dates, collect_all_data, save_to_csv
+
+yesterday = datetime.date.today() - datetime.timedelta(days=1)
+draw_dates = get_draw_dates()
+
+if yesterday in draw_dates:
+    print("✅ Yesterday was a draw date. Collecting data.")
+    data = collect_all_data()
+    save_to_csv(data)
+else:
+    print("⏭️ Yesterday was NOT a draw date. Skipping.")
+    exit(78)
+EOF
+
+      - name: Commit and push if CSV changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add lottery_results.csv
+          git diff --cached --quiet || git commit -m "🔄 Update lottery results (automated)"
+          git push
