@@ -45,7 +45,9 @@ def read_local_lottery_data(filename=LOTTERY_RESULTS_FILE):
     rows = []
     with open(filename, "r", encoding="utf-8") as f:
         for row in csv.DictReader(f):
-            if row.get("date"):
+            draw_date = (row.get("date") or "").strip()
+            if draw_date:
+                row["date"] = draw_date
                 rows.append(row)
     return rows
 
