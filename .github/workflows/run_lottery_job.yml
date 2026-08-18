@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: 📦 Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
 
       - name: 🐍 Set up Python
         uses: actions/setup-python@v5
@@ -47,6 +49,42 @@ jobs:
           git commit -m "🤖 Update lottery results on $(date +'%Y-%m-%d')" || echo "No changes to commit"
           git pull --rebase origin main || echo "Nothing to rebase"
           git push
+
+      - name: Check if lottery_results.csv changed
+        id: lottery_changed
+        run: |
+          if git diff --quiet HEAD~1 HEAD -- lottery_results.csv >/dev/null 2>&1; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Trigger site sync via repository dispatch
+        if: steps.lottery_changed.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.NEW4761_SITE_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "Missing secret NEW4761_SITE_DISPATCH_TOKEN (required to trigger new4761.github.io workflow)"
+            exit 1
+          fi
+
+          cat <<EOF > /tmp/dispatch.json
+          {
+            "event_type": "lottery-results-updated",
+            "client_payload": {
+              "source_repo": "${{ github.repository }}",
+              "source_sha": "${{ github.sha }}",
+              "source_ref": "${{ github.ref_name }}"
+            }
+          }
+          EOF
+
+          gh api repos/new4761/new4761.github.io/dispatches \
+            --method POST \
+            --input /tmp/dispatch.json
+
+          echo "Triggered site sync for commit ${{ github.sha }}."
 
       - name: 🚀 Update Google Sheets from GitHub CSVs
         env:
