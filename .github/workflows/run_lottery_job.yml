@@ -11,7 +11,9 @@ jobs:
 
     steps:
       - name: 📦 Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: 🐍 Set up Python
         uses: actions/setup-python@v5
@@ -23,13 +25,45 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: 🧪 Capture previous lottery checksum
+        id: lottery_before
+        run: |
+          if [ -f lottery_results.csv ]; then
+            previous_hash=$(sha256sum lottery_results.csv | awk '{print $1}')
+          else
+            previous_hash="missing"
+          fi
+          echo "hash=$previous_hash" >> "$GITHUB_OUTPUT"
+
       - name: 📝 Run query.py (fetch data)
         run: python query.py
 
+      - name: 🧾 Compute post-sync checksum
+        id: lottery_after
+        run: |
+          if [ -f lottery_results.csv ]; then
+            current_hash=$(sha256sum lottery_results.csv | awk '{print $1}')
+          else
+            current_hash="missing"
+          fi
+
+          generated_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+
+          echo "hash=$current_hash" >> "$GITHUB_OUTPUT"
+          echo "generated_at=$generated_at" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ steps.lottery_before.outputs.hash }}" = "$current_hash" ] && [ "$current_hash" != "missing" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 🔁 Run query_locker.py (transform data)
+        if: steps.lottery_after.outputs.changed == 'true'
         run: python query_locker.py
 
       - name: 🔍 Show outputs
+        if: steps.lottery_after.outputs.changed == 'true'
         run: |
           echo "📁 lottery_results.csv:"
           head -n 5 lottery_results.csv
@@ -38,6 +72,8 @@ jobs:
           head -n 5 lottery_results_looker_ready.csv
 
       - name: ✅ Commit and push CSV updates
+        id: lottery_push
+        if: steps.lottery_after.outputs.changed == 'true'
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
@@ -48,7 +84,43 @@ jobs:
           git pull --rebase origin main || echo "Nothing to rebase"
           git push
 
+      - name: Trigger site sync via repository dispatch
+        if: steps.lottery_after.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.NEW4761_SITE_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "Missing secret NEW4761_SITE_DISPATCH_TOKEN (required to trigger new4761.github.io workflow)"
+            exit 1
+          fi
+
+          if [ ! -x "$(command -v gh)" ]; then
+            echo "GitHub CLI (gh) is not available in this runner."
+            exit 1
+          fi
+
+          cat <<EOF > /tmp/dispatch.json
+          {
+            "event_type": "lottery-results-updated",
+            "client_payload": {
+              "source_repo": "${{ github.repository }}",
+              "source_sha": "${{ github.sha }}",
+              "source_ref": "${{ github.ref_name }}",
+              "lottery_results_csv_sha": "${{ steps.lottery_after.outputs.hash }}",
+              "lottery_results_csv_sha_prev": "${{ steps.lottery_before.outputs.hash }}",
+              "generated_at": "${{ steps.lottery_after.outputs.generated_at }}"
+            }
+          }
+          EOF
+
+          gh api repos/new4761/new4761.github.io/dispatches \
+            --method POST \
+            --input /tmp/dispatch.json
+
+          echo "Triggered site sync for commit ${{ github.sha }}."
+
       - name: 🚀 Update Google Sheets from GitHub CSVs
+        if: steps.lottery_after.outputs.changed == 'true'
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
         run: |
