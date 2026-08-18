@@ -120,6 +120,7 @@ jobs:
           echo "Triggered site sync for commit ${{ github.sha }}."
 
       - name: 🚀 Update Google Sheets from GitHub CSVs
+        if: steps.lottery_after.outputs.changed == 'true'
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
         run: |
