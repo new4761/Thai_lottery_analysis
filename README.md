@@ -17,6 +17,7 @@ Required secret in this repo:
 To reduce unnecessary traffic:
 - The workflow now computes a SHA-256 checksum of `lottery_results.csv` before and after refresh and only dispatches when checksum changes.
 - The dispatch payload includes `lottery_results_csv_sha` and `lottery_results_csv_sha_prev` for downstream cache checks.
+- `query_locker.py` only runs when `lottery_results.csv` changed, so downstream syncs avoid extra compute on unchanged runs.
 
 Data refresh is incremental:
 - The script reuses existing local CSV rows and requests only newer draw dates (at most one draw cycle back), then rewrites the CSV.
