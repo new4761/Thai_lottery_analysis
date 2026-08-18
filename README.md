@@ -13,3 +13,10 @@ Data sync: `run_lottery_job.yml` now triggers the site workflow on `3` and `17` 
 Required secret in this repo:
 - `NEW4761_SITE_DISPATCH_TOKEN` (PAT with permission to dispatch workflows on
   `new4761.github.io`).
+
+To reduce unnecessary traffic:
+- The workflow now computes a SHA-256 checksum of `lottery_results.csv` before and after refresh and only dispatches when checksum changes.
+- The dispatch payload includes `lottery_results_csv_sha` and `lottery_results_csv_sha_prev` for downstream cache checks.
+
+Data refresh is incremental:
+- The script reuses existing local CSV rows and requests only newer draw dates (at most one draw cycle back), then rewrites the CSV.
