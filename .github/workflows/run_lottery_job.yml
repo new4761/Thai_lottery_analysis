@@ -38,17 +38,6 @@ jobs:
       - name: 📝 Run query.py (fetch data)
         run: python query.py
 
-      - name: 🔁 Run query_locker.py (transform data)
-        run: python query_locker.py
-
-      - name: 🔍 Show outputs
-        run: |
-          echo "📁 lottery_results.csv:"
-          head -n 5 lottery_results.csv
-          echo ""
-          echo "📁 lottery_results_looker_ready.csv:"
-          head -n 5 lottery_results_looker_ready.csv
-
       - name: 🧾 Compute post-sync checksum
         id: lottery_after
         run: |
@@ -68,6 +57,19 @@ jobs:
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: 🔁 Run query_locker.py (transform data)
+        if: steps.lottery_after.outputs.changed == 'true'
+        run: python query_locker.py
+
+      - name: 🔍 Show outputs
+        if: steps.lottery_after.outputs.changed == 'true'
+        run: |
+          echo "📁 lottery_results.csv:"
+          head -n 5 lottery_results.csv
+          echo ""
+          echo "📁 lottery_results_looker_ready.csv:"
+          head -n 5 lottery_results_looker_ready.csv
 
       - name: ✅ Commit and push CSV updates
         id: lottery_push
