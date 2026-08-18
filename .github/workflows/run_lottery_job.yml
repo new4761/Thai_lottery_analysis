@@ -11,7 +11,7 @@ jobs:
 
     steps:
       - name: 📦 Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
@@ -91,6 +91,11 @@ jobs:
         run: |
           if [ -z "$GH_TOKEN" ]; then
             echo "Missing secret NEW4761_SITE_DISPATCH_TOKEN (required to trigger new4761.github.io workflow)"
+            exit 1
+          fi
+
+          if [ ! -x "$(command -v gh)" ]; then
+            echo "GitHub CLI (gh) is not available in this runner."
             exit 1
           fi
 
