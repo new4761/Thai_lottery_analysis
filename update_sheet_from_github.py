@@ -56,24 +56,51 @@ def update_sheet_from_csv(spreadsheet_name, csv_url):
 
     client = gspread.authorize(creds)
 
-    # Open spreadsheet by name and get first sheet
+    # Open spreadsheet by name
     spreadsheet = client.open(spreadsheet_name)
     worksheet = spreadsheet.sheet1
 
-    # Clear existing data
-    worksheet.clear()
-
-    # Update sheet (values first, range second)
+    # Write data to existing worksheet atomically
+    # Step 1: Update all data first (this operation is atomic within itself)
+    print(f"  1️⃣ Uploading {len(csv_data)} rows to {worksheet.title}...")
     worksheet.update(values=csv_data, range_name='A1')
 
-    print(f"Successfully updated '{spreadsheet.title}' (sheet: '{worksheet.title}') with data from {csv_url}")
+    # Step 2: Clear any trailing rows that may exist beyond the new data
+    # This prevents stale data from previous runs
+    last_row_with_data = len(csv_data)
+    sheet_rows = worksheet.row_count
+    if sheet_rows > last_row_with_data:
+        print(f"  2️⃣ Clearing trailing rows ({last_row_with_data + 1} to {sheet_rows})...")
+        worksheet.delete_rows(last_row_with_data + 1, sheet_rows)
+
+    print(f"✅ Successfully updated '{spreadsheet.title}' (sheet: '{worksheet.title}') "
+          f"with {len(csv_data)} rows")
+
+def update_all_sheets():
+    """Update both lottery sheets with error handling."""
+    updates = [
+        ("lottery_results",
+         "https://raw.githubusercontent.com/new4761/Thai_lottery_analysis/refs/heads/main/lottery_results.csv"),
+        ("lottery_results_looker_ready",
+         "https://raw.githubusercontent.com/new4761/Thai_lottery_analysis/refs/heads/main/lottery_results_looker_ready.csv"),
+    ]
+
+    failed = []
+    for sheet_name, csv_url in updates:
+        try:
+            update_sheet_from_csv(sheet_name, csv_url)
+        except Exception as e:
+            failed.append((sheet_name, str(e)))
+            print(f"❌ Failed to update '{sheet_name}': {e}")
+
+    if failed:
+        raise RuntimeError(
+            f"Failed to update {len(failed)} sheet(s). "
+            f"Please retry to ensure consistency. Details: {failed}"
+        )
+
+    print("\n✅ All sheets updated successfully")
+
 
 if __name__ == "__main__":
-    update_sheet_from_csv(
-        "lottery_results",
-        "https://raw.githubusercontent.com/new4761/Thai_lottery_analysis/refs/heads/main/lottery_results.csv"
-    )
-    update_sheet_from_csv(
-        "lottery_results_looker_ready",
-        "https://raw.githubusercontent.com/new4761/Thai_lottery_analysis/refs/heads/main/lottery_results_looker_ready.csv"
-    )
+    update_all_sheets()
