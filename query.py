@@ -276,6 +276,7 @@ def collect_all_data():
         )
         return coerce_and_sort_rows([row for row in all_data.values()])
 
+    successfully_added = False
     for date in draw_dates:
         result = fetch_lottery_result(date)
         if result:
@@ -284,7 +285,17 @@ def collect_all_data():
                 print(f"⚠️ No draw numbers returned for {date}; skipping row write")
                 continue
             all_data[str(date)] = {"date": str(date), **extracted_data}
+            successfully_added = True
         time.sleep(1)  # Be polite to the server
+
+    if not all_data:
+        raise RuntimeError(
+            f"❌ No rows were saved from API for any pending date through {today.isoformat()}. "
+            "Keeping existing lottery_results.csv unchanged."
+        )
+
+    if not successfully_added:
+        print("ℹ️ No new draw dates were successfully fetched; using existing cached rows.")
 
     coalesced_rows = [all_data[key] for key in sorted(all_data)]
     return coerce_and_sort_rows(coalesced_rows)
