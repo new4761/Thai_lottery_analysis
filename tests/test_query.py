@@ -1,7 +1,8 @@
 import datetime
 import unittest
 
-from query import get_draw_dates, get_pending_draw_dates
+from draw_dates import get_draw_dates
+from query import get_pending_draw_dates
 
 
 class GetDrawDatesTests(unittest.TestCase):

@@ -5,6 +5,7 @@ import time
 import requests
 import re
 import io
+from draw_dates import get_draw_dates
 
 LOTTERY_RESULTS_FILE = "lottery_results.csv"
 LOTTERY_START_DATE = "2010-03-01"
@@ -29,26 +30,6 @@ PRIZE_WIDTHS = {
 MIN_DAILY_DRAWS = 2  # At least first and second prize per draw
 
 
-# Get the list of draw dates based on the year and special conditions for May
-def get_draw_dates(start_date=LOTTERY_START_DATE, end_date=None):
-    start_date = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
-    end_date = end_date or datetime.date.today()  # Use today as default end date
-
-    draw_dates = []
-    for year in range(start_date.year, end_date.year + 1):
-        for month in range(1, 13):
-            if year == start_date.year and month < start_date.month:
-                continue  # Skip months before the start date year-month
-            if year == end_date.year and month > end_date.month:
-                break  # Stop if the year-month is after the end date
-
-            draw_days = [2, 16] if month == 5 else [1, 16]
-            for day in draw_days:
-                date = datetime.date(year, month, day)
-                if start_date <= date <= end_date:
-                    draw_dates.append(date)
-    draw_dates.sort()
-    return draw_dates
 
 
 def get_pending_draw_dates(latest_known_date, end_date=None):
