@@ -5,8 +5,8 @@ Visualization : https://lookerstudio.google.com/u/0/reporting/c0a35bdd-e32a-4bb8
 
 
 Random lottery number tool: https://new4761.github.io/tools/lottery/
-
-Updated tool endpoint (explicit): https://new4761.github.io/tools/lottery/index.html
+Endpoint now resolves directly to `https://new4761.github.io/tools/lottery/` (canonical),
+so older `/index.html` links also work.
 
 Data sync: `run_lottery_job.yml` now triggers the site workflow on `3` and `17` each month, and sends a `repository_dispatch` event to
 `new4761.github.io` only when `lottery_results.csv` actually changed.

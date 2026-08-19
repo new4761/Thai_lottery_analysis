@@ -1,9 +1,15 @@
 name: Update Thai Lottery Data
+concurrency:
+  group: lottery-data-sync
+  cancel-in-progress: false
 
 on:
   schedule:
     - cron: '0 8 3,17 * *'  # Run at 15:00 Thailand time on 3rd and 17th
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   update-lottery:
@@ -30,10 +36,16 @@ jobs:
         run: |
           if [ -f lottery_results.csv ]; then
             previous_hash=$(sha256sum lottery_results.csv | awk '{print $1}')
+            previous_rows=$(( $(wc -l < lottery_results.csv) - 1 ))
+            previous_latest=$(tail -n 1 lottery_results.csv | cut -d',' -f1)
           else
             previous_hash="missing"
+            previous_rows="missing"
+            previous_latest="missing"
           fi
           echo "hash=$previous_hash" >> "$GITHUB_OUTPUT"
+          echo "rows=$previous_rows" >> "$GITHUB_OUTPUT"
+          echo "latest_date=$previous_latest" >> "$GITHUB_OUTPUT"
 
       - name: 📝 Run query.py (fetch data)
         run: python query.py
@@ -43,19 +55,45 @@ jobs:
         run: |
           if [ -f lottery_results.csv ]; then
             current_hash=$(sha256sum lottery_results.csv | awk '{print $1}')
+            current_rows=$(( $(wc -l < lottery_results.csv) - 1 ))
+            current_latest=$(tail -n 1 lottery_results.csv | cut -d',' -f1)
           else
             current_hash="missing"
+            current_rows="missing"
+            current_latest="missing"
           fi
 
           generated_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          if [ "$current_rows" != "missing" ] && [ "${{ steps.lottery_before.outputs.rows }}" != "missing" ]; then
+            rows_added=$(( current_rows - ${{ steps.lottery_before.outputs.rows }} ))
+          else
+            rows_added="n/a"
+          fi
+
+          if [ "$current_rows" != "missing" ] && [ "${{ steps.lottery_before.outputs.rows }}" != "missing" ] && [ "$rows_added" -lt 0 ]; then
+            rows_added="n/a"
+          fi
 
           echo "hash=$current_hash" >> "$GITHUB_OUTPUT"
           echo "generated_at=$generated_at" >> "$GITHUB_OUTPUT"
+          echo "rows=$current_rows" >> "$GITHUB_OUTPUT"
+          echo "latest_date=$current_latest" >> "$GITHUB_OUTPUT"
+          echo "rows_added=$rows_added" >> "$GITHUB_OUTPUT"
+          echo "latest_before=${{ steps.lottery_before.outputs.latest_date }}" >> "$GITHUB_OUTPUT"
+          echo "latest_after=$current_latest" >> "$GITHUB_OUTPUT"
 
           if [ "${{ steps.lottery_before.outputs.hash }}" = "$current_hash" ] && [ "$current_hash" != "missing" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "change_reason=source-content-unchanged" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
+            if [ "${{ steps.lottery_before.outputs.hash }}" = "missing" ]; then
+              echo "change_reason=first-sync-created-file" >> "$GITHUB_OUTPUT"
+            elif [ "${{ steps.lottery_before.outputs.rows }}" != "missing" ] && [ "$current_rows" != "missing" ] && [ "$current_rows" -gt "${{ steps.lottery_before.outputs.rows }}" ]; then
+              echo "change_reason=rows-added" >> "$GITHUB_OUTPUT"
+            else
+              echo "change_reason=content-replaced" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - name: 🔁 Run query_locker.py (transform data)
@@ -106,6 +144,12 @@ jobs:
               "source_repo": "${{ github.repository }}",
               "source_sha": "${{ github.sha }}",
               "source_ref": "${{ github.ref_name }}",
+              "change_reason": "${{ steps.lottery_after.outputs.change_reason }}",
+              "rows_before": "${{ steps.lottery_before.outputs.rows }}",
+              "rows_after": "${{ steps.lottery_after.outputs.rows }}",
+              "rows_added": "${{ steps.lottery_after.outputs.rows_added }}",
+              "latest_before": "${{ steps.lottery_after.outputs.latest_before }}",
+              "latest_after": "${{ steps.lottery_after.outputs.latest_after }}",
               "lottery_results_csv_sha": "${{ steps.lottery_after.outputs.hash }}",
               "lottery_results_csv_sha_prev": "${{ steps.lottery_before.outputs.hash }}",
               "generated_at": "${{ steps.lottery_after.outputs.generated_at }}"

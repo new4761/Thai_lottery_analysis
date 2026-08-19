@@ -3,10 +3,15 @@ import datetime
 import os
 import time
 import requests
+import re
 
 LOTTERY_RESULTS_FILE = "lottery_results.csv"
 LOTTERY_START_DATE = "2010-03-01"
 FIELD_NAMES = ["date", "first", "second", "third", "fourth", "fifth", "last2", "last3f", "last3b", "near1"]
+API_URL = "https://www.glo.or.th/api/checking/getLotteryResult"
+REQUEST_TIMEOUT_SECONDS = 12
+REQUEST_RETRIES = 3
+REQUEST_RETRY_DELAY_SECONDS = 2
 
 
 # Get the list of draw dates based on the year and special conditions for May
@@ -61,9 +66,33 @@ def get_latest_local_draw_date(rows):
     return latest
 
 
-# Function to fetch lottery results
+def sanitize_number(value):
+    digits_only = re.sub(r"\D", "", str(value).strip())
+    return digits_only
+
+
+def normalize_prize_value(prize_name, value):
+    cleaned = sanitize_number(value)
+    if not cleaned:
+        return ""
+
+    target_width = {"last2": 2, "last3f": 3, "last3b": 3}
+    width = target_width.get(prize_name, 0)
+    if width:
+        return cleaned.zfill(width)
+    return cleaned
+
+
+def validate_lottery_response(payload):
+    if not isinstance(payload, dict):
+        return False
+    response = payload.get("response")
+    result = response.get("result") if isinstance(response, dict) else None
+    data = result.get("data") if isinstance(result, dict) else None
+    return isinstance(data, dict)
+
+
 def fetch_lottery_result(date):
-    url = "https://www.glo.or.th/api/checking/getLotteryResult"
     headers = {
         "Content-Type": "application/json"
     }
@@ -73,19 +102,33 @@ def fetch_lottery_result(date):
         "year": str(date.year),
     }
 
-    try:
-        response = requests.post(url, json=data, headers=headers, timeout=10)
-        if response.status_code == 200:
+    last_error = None
+    for attempt in range(1, REQUEST_RETRIES + 1):
+        try:
+            response = requests.post(API_URL, json=data, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
+            response.raise_for_status()
             json_response = response.json()
-            if json_response.get("response") is not None:
+            if validate_lottery_response(json_response):
                 return json_response
-            print(f"⚠️ No data for {date} (null response field)")
+            print(f"⚠️ Invalid response schema for {date} (attempt {attempt}/{REQUEST_RETRIES})")
             return None
-        print(f"❌ Failed for {date}, status code: {response.status_code}")
-        return None
-    except Exception as e:
-        print(f"❌ Exception for {date}: {e}")
-        return None
+        except requests.RequestException as error:
+            last_error = str(error)
+            if attempt < REQUEST_RETRIES:
+                print(f"⚠️ Fetch attempt {attempt}/{REQUEST_RETRIES} for {date} failed: {error}")
+                time.sleep(REQUEST_RETRY_DELAY_SECONDS * attempt)
+            continue
+
+        except Exception as error:
+            last_error = str(error)
+            print(f"⚠️ Unexpected error for {date} (attempt {attempt}/{REQUEST_RETRIES}): {error}")
+            if attempt < REQUEST_RETRIES:
+                time.sleep(REQUEST_RETRY_DELAY_SECONDS * attempt)
+                continue
+            return None
+
+    print(f"❌ Failed for {date} after {REQUEST_RETRIES} attempts: {last_error}")
+    return None
 
 
 # Extract data and ignore round numbers, only storing values
@@ -99,8 +142,13 @@ def extract_lottery_data(lottery_result):
     # Iterate through each group like 'first', 'second', 'third', etc.
     for key in prize_groups:
         if key in data:
-            # Extract all the 'value' entries for each group, treating numbers as strings to preserve leading zeros
-            extracted_data[key] = ",".join([str(number["value"]).zfill(len(number["value"])) for number in data[key]["number"]])
+            # Extract all the 'value' entries for each group
+            normalized_numbers = [
+                normalize_prize_value(key, number.get("value"))
+                for number in data[key].get("number", [])
+                if isinstance(number, dict)
+            ]
+            extracted_data[key] = ",".join([num for num in normalized_numbers if num])
         else:
             extracted_data[key] = ""  # If no data, add an empty string
 
