@@ -1,30 +1,11 @@
-Thai lottery fetch script with script for format data to be able to use with Google locker
-Last run 17/04/2025, For my personal use
+# Thai Lottery Tools
 
-Visualization : https://lookerstudio.google.com/u/0/reporting/c0a35bdd-e32a-4bb8-b5fe-8a4f5d926cf3/page/9kEHF
+## Random Lottery Number Generator
+**Generates random Thai lottery numbers for entertainment purposes.**
 
+→ [Open lottery tool](https://new4761.github.io/tools/lottery/)
 
-Random lottery number tool: https://new4761.github.io/tools/lottery/
-Endpoint now resolves directly to `https://new4761.github.io/tools/lottery/` (canonical),
-so older `/index.html` links also work.
+## Historical Data & Analysis
+**View Thai lottery results and trends.**
 
-Data sync: `run_lottery_job.yml` now triggers the site workflow on `3` and `17` each month, and sends a `repository_dispatch` event to
-`new4761.github.io` only when `lottery_results.csv` actually changed.
-Required secret in this repo:
-- `NEW4761_SITE_DISPATCH_TOKEN` (PAT with permission to dispatch workflows on
-  `new4761.github.io`).
-
-To reduce unnecessary traffic:
-- The workflow now computes a SHA-256 checksum of `lottery_results.csv` before and after refresh and only dispatches when checksum changes.
-- The dispatch payload includes `lottery_results_csv_sha` and `lottery_results_csv_sha_prev` for downstream cache checks.
-- `query_locker.py` only runs when `lottery_results.csv` changed, so downstream syncs avoid extra compute on unchanged runs.
-
-Data refresh is incremental:
-- The script reuses existing local CSV rows and requests only newer draw dates (at most one draw cycle back), then rewrites the CSV.
-
-Runtime behavior improvements:
-- `query.py` exits the fetch loop early when no new draw dates are pending, so scheduled jobs avoid unnecessary API calls.
-- `run_lottery_job.yml` now avoids file writes when CSV content is unchanged, which keeps workflow noise and churn low.
-- `collect_all_data()` now protects against an all-or-nothing API miss by failing fast on a full empty fetch, so it won’t publish an empty/truncated CSV when no rows are available.
-- Lottery number extraction now drops malformed prize values that exceed expected digit width and ignores malformed number payload types, preventing shape-corrupted rows from being accepted.
-- `update_sheet_from_github.py` now retries CSV downloads, validates headers, and fails fast if fetched data is empty/malformed.
+→ [View on Looker Studio](https://lookerstudio.google.com/u/0/reporting/c0a35bdd-e32a-4bb8-b5fe-8a4f5d926cf3/page/9kEHF)
