@@ -3,16 +3,45 @@ import json
 import gspread
 import requests
 import csv
+import time
 from io import StringIO
 from google.oauth2.service_account import Credentials
+
+
+REQUEST_TIMEOUT_SECONDS = 30
+REQUIRED_COLUMNS = {"date", "first", "second", "third", "fourth", "fifth", "last2", "last3f", "last3b", "near1"}
+REQUEST_RETRIES = 3
+
+
+def fetch_csv_rows(csv_url):
+    last_error = None
+    for attempt in range(1, REQUEST_RETRIES + 1):
+        try:
+            response = requests.get(csv_url, timeout=REQUEST_TIMEOUT_SECONDS)
+            response.raise_for_status()
+            rows = list(csv.reader(StringIO(response.text)))
+            if not rows or len(rows) < 2:
+                raise RuntimeError(f"No data rows found in CSV payload from {csv_url}")
+            header = [column.strip().lstrip("\ufeff") for column in rows[0]]
+            if not REQUIRED_COLUMNS.issubset(set(header)):
+                raise RuntimeError(
+                    f"CSV from {csv_url} is missing required columns."
+                )
+            return rows
+        except Exception as error:
+            last_error = error
+            if attempt < REQUEST_RETRIES:
+                time.sleep(2 * attempt)
+                continue
+    raise RuntimeError(
+        f"Failed to fetch valid CSV from {csv_url} after {REQUEST_RETRIES} attempts: {last_error}"
+    )
+
 
 def update_sheet_from_csv(spreadsheet_name, csv_url):
     print(f"Starting update for spreadsheet named: '{spreadsheet_name}'")
 
-    # Download CSV from GitHub
-    response = requests.get(csv_url)
-    response.raise_for_status()
-    csv_data = list(csv.reader(StringIO(response.text)))
+    csv_data = fetch_csv_rows(csv_url)
 
     # Load credentials from env var
     scope = [
