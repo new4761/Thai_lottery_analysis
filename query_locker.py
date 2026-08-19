@@ -55,5 +55,6 @@ for idx, row in df.iterrows():
 df_looker = pd.DataFrame(records)
 
 # 💾 Save to CSV
+df_looker = df_looker.sort_values(["date", "prize_type", "number"]).drop_duplicates()
 df_looker.to_csv("lottery_results_looker_ready.csv", index=False)
 print("✅ Looker-ready dataset saved as 'lottery_results_looker_ready.csv'")
