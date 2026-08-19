@@ -157,7 +157,6 @@ def validate_lottery_response(payload):
 
 def fetch_lottery_result(date):
     headers = {
-        "Content-Type": "application/json",
         "Accept": "application/json",
         "User-Agent": "ThaiLotteryBot/1.0"
     }
@@ -317,8 +316,7 @@ def save_to_csv(data, filename=LOTTERY_RESULTS_FILE):
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=FIELD_NAMES)
     writer.writeheader()
-    for entry in data:
-        writer.writerow(entry)
+    writer.writerows(data)
     serialized = output.getvalue()
 
     if os.path.exists(filename):
