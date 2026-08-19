@@ -136,6 +136,19 @@ jobs:
           echo "📁 lottery_results_looker_ready.csv:"
           head -n 5 lottery_results_looker_ready.csv
 
+      - name: ✔️ Validate data integrity before publication
+        if: steps.lottery_after.outputs.changed == 'true'
+        run: |
+          echo "Validating lottery_results.csv schema and data..."
+          python validators.py lottery_results.csv "${{ steps.lottery_before.outputs.rows }}"
+
+          echo "Validating lottery_results_looker_ready.csv format..."
+          python -c "
+          import validators
+          info = validators.validate_looker_csv('lottery_results_looker_ready.csv')
+          print(f'✅ Looker CSV valid: {info[\"row_count\"]} records across {info[\"unique_dates\"]} dates')
+          "
+
       - name: ✅ Commit and push CSV updates
         id: lottery_push
         if: steps.lottery_after.outputs.changed == 'true'
@@ -195,6 +208,17 @@ jobs:
             --input /tmp/dispatch.json
 
           echo "Triggered site sync for commit ${{ github.sha }}."
+
+      - name: ✔️ Final validation before sheet publication
+        if: steps.lottery_after.outputs.changed == 'true'
+        run: |
+          echo "Final validation before publishing to Google Sheets..."
+          python validators.py lottery_results.csv "${{ steps.lottery_before.outputs.rows }}"
+          python -c "
+          import validators
+          validators.validate_looker_csv('lottery_results_looker_ready.csv')
+          print('✅ All validations passed - safe to publish')
+          "
 
       - name: 🚀 Update Google Sheets from GitHub CSVs
         if: steps.lottery_after.outputs.changed == 'true'
