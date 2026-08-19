@@ -66,8 +66,13 @@ def append_prize_records(records, row_date, prize, raw_values):
 # 🔁 Flatten into long format
 records = []
 assert_required_columns(df)
+invalid_rows = 0
 
 for idx, row in df.iterrows():
+    if not is_iso_date(row["date"]):
+        invalid_rows += 1
+        continue
+
     for prize in prize_columns:
         append_prize_records(records, row["date"], prize, row[prize])
 
@@ -76,6 +81,8 @@ df_looker = pd.DataFrame(records, columns=["date", "prize_type", "number"])
 if df_looker.empty:
     df_looker = pd.DataFrame(columns=["date", "prize_type", "number"])
     print("⚠️ No lottery rows were available for Looker transform.")
+elif invalid_rows:
+    print(f"⚠️ Skipped {invalid_rows} rows in lottery_results.csv due invalid date format.")
 
 # 💾 Save to CSV
 df_looker = df_looker.sort_values(["date", "prize_type", "number"]).drop_duplicates()
