@@ -26,6 +26,7 @@ PRIZE_WIDTHS = {
     "last3b": 3,
     "near1": 6,
 }
+MIN_DAILY_DRAWS = 2  # At least first and second prize per draw
 
 
 # Get the list of draw dates based on the year and special conditions for May
@@ -270,6 +271,37 @@ def coerce_and_sort_rows(raw_rows):
     return sorted(normalized, key=lambda row: row["date"])
 
 
+def validate_dataset(rows, existing_rows):
+    if not rows:
+        raise ValueError("Dataset is empty")
+
+    dates = set()
+    for row in rows:
+        date = row.get("date", "")
+        if not date:
+            raise ValueError("Row missing date field")
+        if date in dates:
+            raise ValueError(f"Duplicate date found: {date}")
+        dates.add(date)
+
+    existing_count = len(existing_rows)
+    new_count = len(rows)
+    if new_count < existing_count:
+        raise ValueError(
+            f"Row count decreased: {existing_count} → {new_count}. "
+            "This suggests data loss. Aborting to preserve existing dataset."
+        )
+
+    if new_count > 0:
+        latest_date = max(parse_lottery_date(row["date"]) for row in rows)
+        today = datetime.date.today()
+        if latest_date > today:
+            raise ValueError(
+                f"Latest draw date {latest_date} is in the future. "
+                f"Expected date ≤ {today}. Data may be corrupted."
+            )
+
+
 # Collect all the data for the dates
 def collect_all_data():
     existing_data = read_local_lottery_data(LOTTERY_RESULTS_FILE)
@@ -308,7 +340,10 @@ def collect_all_data():
         print("ℹ️ No new draw dates were successfully fetched; using existing cached rows.")
 
     coalesced_rows = [all_data[key] for key in sorted(all_data)]
-    return coerce_and_sort_rows(coalesced_rows)
+    final_rows = coerce_and_sort_rows(coalesced_rows)
+
+    validate_dataset(final_rows, existing_data)
+    return final_rows
 
 
 # Save the collected data to a CSV file
