@@ -1,5 +1,6 @@
 import csv
 import datetime
+import os
 import time
 import requests
 import re
@@ -8,7 +9,8 @@ LOTTERY_RESULTS_FILE = "lottery_results.csv"
 LOTTERY_START_DATE = "2010-03-01"
 FIELD_NAMES = ["date", "first", "second", "third", "fourth", "fifth", "last2", "last3f", "last3b", "near1"]
 API_URL = "https://www.glo.or.th/api/checking/getLotteryResult"
-REQUEST_TIMEOUT_SECONDS = 12
+CONNECT_TIMEOUT_SECONDS = 4
+READ_TIMEOUT_SECONDS = 12
 REQUEST_RETRIES = 3
 REQUEST_RETRY_DELAY_SECONDS = 2
 PRIZE_WIDTHS = {
@@ -121,7 +123,9 @@ def validate_lottery_response(payload):
 
 def fetch_lottery_result(date):
     headers = {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "ThaiLotteryBot/1.0"
     }
     data = {
         "date": date.strftime("%d"),
@@ -132,7 +136,12 @@ def fetch_lottery_result(date):
     last_error = None
     for attempt in range(1, REQUEST_RETRIES + 1):
         try:
-            response = requests.post(API_URL, json=data, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
+            response = requests.post(
+                API_URL,
+                json=data,
+                headers=headers,
+                timeout=(CONNECT_TIMEOUT_SECONDS, READ_TIMEOUT_SECONDS),
+            )
             response.raise_for_status()
             json_response = response.json()
             if validate_lottery_response(json_response):

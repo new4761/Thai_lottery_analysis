@@ -1,8 +1,8 @@
-import pandas as pd
 import re
+import pandas as pd
 
-# 📥 Load the raw data
-df = pd.read_csv("lottery_results.csv")
+# 📥 Load the raw data with stable typing for lottery numbers
+df = pd.read_csv("lottery_results.csv", dtype=str).fillna("")
 
 # 🎯 Columns to extract
 prize_columns = ["first", "second", "third", "fourth", "fifth", "last2", "last3f", "last3b", "near1"]
@@ -39,8 +39,8 @@ records = []
 
 for idx, row in df.iterrows():
     for prize in prize_columns:
-        values = str(row[prize]).strip()
-        if values.lower() != 'nan' and values:
+        values = row[prize].strip()
+        if values:
             for val in values.split(","):
                 normalized = normalize_prize_value(prize, val.strip())
                 if normalized:
@@ -52,7 +52,7 @@ for idx, row in df.iterrows():
                     })
 
 # 📊 Final Looker-friendly format
-df_looker = pd.DataFrame(records)
+df_looker = pd.DataFrame(records, columns=["date", "prize_type", "number"])
 
 # 💾 Save to CSV
 df_looker = df_looker.sort_values(["date", "prize_type", "number"]).drop_duplicates()
