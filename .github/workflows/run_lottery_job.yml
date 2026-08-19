@@ -117,8 +117,12 @@ jobs:
       - name: ⚠️ Validate transformed output
         if: steps.lottery_after.outputs.changed == 'true'
         run: |
-          if [ "${{ steps.locker_after.outputs.rows }}" = "0" ]; then
-            echo "Looker transformed output is empty, aborting sync to avoid publishing bad data."
+          if [ ! -f lottery_results_looker_ready.csv ]; then
+            echo "❌ Error: lottery_results_looker_ready.csv was not created"
+            exit 1
+          fi
+          if [ "${{ steps.locker_after.outputs.rows }}" = "missing" ] || [ "${{ steps.locker_after.outputs.rows }}" = "0" ]; then
+            echo "❌ Error: Looker transformed output is empty or invalid, aborting sync"
             exit 1
           fi
 
@@ -154,7 +158,7 @@ jobs:
             exit 1
           fi
 
-          if [ ! -x "$(command -v gh)" ]; then
+          if ! command -v gh &> /dev/null; then
             echo "GitHub CLI (gh) is not available in this runner."
             exit 1
           fi

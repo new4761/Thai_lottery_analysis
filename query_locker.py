@@ -78,11 +78,11 @@ for idx, row in df.iterrows():
 
 # 📊 Final Looker-friendly format
 df_looker = pd.DataFrame(records, columns=["date", "prize_type", "number"])
+if invalid_rows:
+    print(f"⚠️ Skipped {invalid_rows} rows in lottery_results.csv due invalid date format.")
 if df_looker.empty:
     df_looker = pd.DataFrame(columns=["date", "prize_type", "number"])
     print("⚠️ No lottery rows were available for Looker transform.")
-elif invalid_rows:
-    print(f"⚠️ Skipped {invalid_rows} rows in lottery_results.csv due invalid date format.")
 
 # 💾 Save to CSV
 df_looker = df_looker.sort_values(["date", "prize_type", "number"]).drop_duplicates()
