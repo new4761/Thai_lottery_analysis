@@ -26,3 +26,4 @@ Runtime behavior improvements:
 - `query.py` exits the fetch loop early when no new draw dates are pending, so scheduled jobs avoid unnecessary API calls.
 - `run_lottery_job.yml` now avoids file writes when CSV content is unchanged, which keeps workflow noise and churn low.
 - `collect_all_data()` now protects against an all-or-nothing API miss by failing fast on a full empty fetch, so it won’t publish an empty/truncated CSV when no rows are available.
+- Lottery number extraction now drops malformed prize values that exceed expected digit width and ignores malformed number payload types, preventing shape-corrupted rows from being accepted.

@@ -119,6 +119,11 @@ def normalize_prize_value(prize_name, value):
 
     width = PRIZE_WIDTHS.get(prize_name, 0)
     if width:
+        if len(cleaned) > width:
+            print(
+                f"⚠️ Skipping malformed value for {prize_name}: '{value}' (normalised as '{cleaned}', exceeds width {width})"
+            )
+            return ""
         return cleaned.zfill(width)
     return cleaned
 
@@ -216,10 +221,16 @@ def extract_lottery_data(lottery_result):
             if not isinstance(prize_payload, dict):
                 extracted_data[key] = ""
                 continue
+            prize_numbers = prize_payload.get("number")
+            if not isinstance(prize_numbers, list):
+                if prize_numbers is not None:
+                    print(f"⚠️ Unexpected number payload shape for {key}: {type(prize_numbers).__name__}")
+                extracted_data[key] = ""
+                continue
 
             normalized_numbers = [
                 normalize_prize_value(key, number.get("value"))
-                for number in prize_payload.get("number", [])
+                for number in prize_numbers
                 if isinstance(number, dict)
             ]
             unique_numbers = []
