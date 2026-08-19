@@ -32,6 +32,8 @@ def normalize_prize_value(prize_name, value):
 
     width = PRIZE_WIDTHS.get(prize_name, 0)
     if width:
+        if len(cleaned) > width:
+            return ""
         return cleaned.zfill(width)
     return cleaned
 
