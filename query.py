@@ -301,8 +301,8 @@ def collect_all_data():
 
     if not all_data:
         raise RuntimeError(
-            f"❌ No rows were saved from API for any pending date through {today.isoformat()}. "
-            "Keeping existing lottery_results.csv unchanged."
+            f"❌ Fatal: No rows were saved from API for any pending date through {today.isoformat()}. "
+            "Unable to proceed without data. Existing lottery_results.csv will remain unchanged by this failed sync."
         )
 
     if not successfully_added:
