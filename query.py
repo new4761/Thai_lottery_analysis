@@ -83,6 +83,13 @@ def sanitize_number(value):
     return digits_only
 
 
+def require_row_fields(row):
+    missing = [field for field in FIELD_NAMES if field not in row]
+    if missing:
+        raise ValueError(f"Missing required lottery columns: {', '.join(missing)}")
+    return row
+
+
 def normalize_prize_value(prize_name, value):
     cleaned = sanitize_number(value)
     if not cleaned:
@@ -200,6 +207,28 @@ def extract_lottery_data(lottery_result):
     return extracted_data
 
 
+def coerce_and_sort_rows(raw_rows):
+    if not raw_rows:
+        raise RuntimeError("No lottery rows were parsed from source")
+
+    normalized = []
+    for row in raw_rows:
+        normalized_row = {field: "" for field in FIELD_NAMES}
+        for field in FIELD_NAMES:
+            value = row.get(field, "")
+            normalized_row[field] = "" if value is None else str(value).strip()
+
+        draw_date = parse_lottery_date(normalized_row["date"])
+        if draw_date is None:
+            raise ValueError(f"Invalid date format in row: {normalized_row['date']}")
+        normalized_row["date"] = draw_date.isoformat()
+
+        require_row_fields(normalized_row)
+        normalized.append(normalized_row)
+
+    return sorted(normalized, key=lambda row: row["date"])
+
+
 # Collect all the data for the dates
 def collect_all_data():
     existing_data = read_local_lottery_data(LOTTERY_RESULTS_FILE)
@@ -225,7 +254,8 @@ def collect_all_data():
             all_data[str(date)] = {"date": str(date), **extracted_data}
         time.sleep(1)  # Be polite to the server
 
-    return [all_data[key] for key in sorted(all_data)]
+    coalesced_rows = [all_data[key] for key in sorted(all_data)]
+    return coerce_and_sort_rows(coalesced_rows)
 
 
 # Save the collected data to a CSV file
