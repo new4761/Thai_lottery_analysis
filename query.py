@@ -207,6 +207,10 @@ def extract_lottery_data(lottery_result):
     return extracted_data
 
 
+def has_any_numbers(extracted_data):
+    return any(bool(value) for value in extracted_data.values())
+
+
 def coerce_and_sort_rows(raw_rows):
     if not raw_rows:
         raise RuntimeError("No lottery rows were parsed from source")
@@ -251,6 +255,9 @@ def collect_all_data():
         result = fetch_lottery_result(date)
         if result:
             extracted_data = extract_lottery_data(result)
+            if not has_any_numbers(extracted_data):
+                print(f"⚠️ No draw numbers returned for {date}; skipping row write")
+                continue
             all_data[str(date)] = {"date": str(date), **extracted_data}
         time.sleep(1)  # Be polite to the server
 
