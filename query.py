@@ -183,9 +183,14 @@ def extract_lottery_data(lottery_result):
     for key in prize_groups:
         if key in data:
             # Extract all the 'value' entries for each group
+            prize_payload = data[key]
+            if not isinstance(prize_payload, dict):
+                extracted_data[key] = ""
+                continue
+
             normalized_numbers = [
                 normalize_prize_value(key, number.get("value"))
-                for number in data[key].get("number", [])
+                for number in prize_payload.get("number", [])
                 if isinstance(number, dict)
             ]
             extracted_data[key] = ",".join([num for num in normalized_numbers if num])
