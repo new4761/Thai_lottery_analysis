@@ -21,3 +21,7 @@ To reduce unnecessary traffic:
 
 Data refresh is incremental:
 - The script reuses existing local CSV rows and requests only newer draw dates (at most one draw cycle back), then rewrites the CSV.
+
+Runtime behavior improvements:
+- `query.py` exits the fetch loop early when no new draw dates are pending, so scheduled jobs avoid unnecessary API calls.
+- `run_lottery_job.yml` now avoids file writes when CSV content is unchanged, which keeps workflow noise and churn low.
