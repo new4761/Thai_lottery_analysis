@@ -6,13 +6,23 @@ import csv
 from io import StringIO
 from google.oauth2.service_account import Credentials
 
+
+REQUEST_TIMEOUT_SECONDS = 30
+
+
+def fetch_csv_rows(csv_url):
+    response = requests.get(csv_url, timeout=REQUEST_TIMEOUT_SECONDS)
+    response.raise_for_status()
+    rows = list(csv.reader(StringIO(response.text)))
+    if not rows:
+        raise RuntimeError(f"No rows found in CSV payload from {csv_url}")
+    return rows
+
+
 def update_sheet_from_csv(spreadsheet_name, csv_url):
     print(f"Starting update for spreadsheet named: '{spreadsheet_name}'")
 
-    # Download CSV from GitHub
-    response = requests.get(csv_url)
-    response.raise_for_status()
-    csv_data = list(csv.reader(StringIO(response.text)))
+    csv_data = fetch_csv_rows(csv_url)
 
     # Load credentials from env var
     scope = [
