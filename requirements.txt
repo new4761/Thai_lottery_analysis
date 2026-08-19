@@ -1,6 +1,5 @@
-# Core HTTP and data processing
+# Core HTTP library
 requests>=2.32.0
-pandas>=2.0.0
 
 # Google Sheets integration
 gspread>=6.0.0
