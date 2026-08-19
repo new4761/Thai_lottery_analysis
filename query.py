@@ -225,11 +225,13 @@ def collect_all_data():
 
 # Save the collected data to a CSV file
 def save_to_csv(data, filename=LOTTERY_RESULTS_FILE):
-    with open(filename, "w", newline="", encoding="utf-8") as f:
+    temp_filename = f"{filename}.tmp"
+    with open(temp_filename, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=FIELD_NAMES)
         writer.writeheader()
         for entry in data:
             writer.writerow(entry)
+    os.replace(temp_filename, filename)
 
 
 # Run the script
