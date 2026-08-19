@@ -49,6 +49,19 @@ def get_draw_dates(start_date=LOTTERY_START_DATE, end_date=None):
     return draw_dates
 
 
+def get_pending_draw_dates(latest_known_date, end_date=None):
+    end_date = end_date or datetime.date.today()
+
+    if latest_known_date:
+        recovery_window_start = latest_known_date - datetime.timedelta(days=RECOVERY_LOOKBACK_DAYS)
+        start_date_obj = datetime.datetime.strptime(LOTTERY_START_DATE, "%Y-%m-%d").date()
+        start_date = max(start_date_obj, recovery_window_start).strftime("%Y-%m-%d")
+        candidate_dates = get_draw_dates(start_date, end_date)
+        return [date for date in candidate_dates if date > latest_known_date]
+
+    return get_draw_dates(LOTTERY_START_DATE, end_date)
+
+
 def parse_lottery_date(value):
     try:
         return datetime.datetime.strptime(value, "%Y-%m-%d").date()
@@ -64,9 +77,16 @@ def read_local_lottery_data(filename=LOTTERY_RESULTS_FILE):
     with open(filename, "r", encoding="utf-8") as f:
         for row in csv.DictReader(f):
             draw_date = (row.get("date") or "").strip()
-            if draw_date:
-                row["date"] = draw_date
-                rows.append(row)
+            if not draw_date:
+                continue
+
+            if parse_lottery_date(draw_date) is None:
+                print(f"⚠️ Skipping invalid date row in local CSV: {draw_date}")
+                continue
+
+            normalized_row = {field: (row.get(field) or "").strip() for field in FIELD_NAMES}
+            normalized_row["date"] = draw_date
+            rows.append(normalized_row)
     return rows
 
 
@@ -201,7 +221,12 @@ def extract_lottery_data(lottery_result):
                 for number in prize_payload.get("number", [])
                 if isinstance(number, dict)
             ]
-            extracted_data[key] = ",".join([num for num in normalized_numbers if num])
+            unique_numbers = []
+            for num in normalized_numbers:
+                if not num or num in unique_numbers:
+                    continue
+                unique_numbers.append(num)
+            extracted_data[key] = ",".join(unique_numbers)
         else:
             extracted_data[key] = ""  # If no data, add an empty string
 
@@ -214,7 +239,7 @@ def has_any_numbers(extracted_data):
 
 def coerce_and_sort_rows(raw_rows):
     if not raw_rows:
-        raise RuntimeError("No lottery rows were parsed from source")
+        return []
 
     normalized = []
     for row in raw_rows:
@@ -239,20 +264,18 @@ def collect_all_data():
     existing_data = read_local_lottery_data(LOTTERY_RESULTS_FILE)
     latest_known_date = get_latest_local_draw_date(existing_data)
 
-    start_date = LOTTERY_START_DATE
-    if latest_known_date:
-        # Re-check one draw cycle to recover from transient fetch misses.
-        resume_from = latest_known_date - datetime.timedelta(days=RECOVERY_LOOKBACK_DAYS)
-        start_date_obj = datetime.datetime.strptime(LOTTERY_START_DATE, "%Y-%m-%d").date()
-        start_date = max(start_date_obj, resume_from).strftime("%Y-%m-%d")
-
     all_data = {row["date"]: row for row in existing_data if row.get("date")}
     today = datetime.date.today()
-    draw_dates = get_draw_dates(start_date, today)
+    draw_dates = get_pending_draw_dates(latest_known_date, today)
+
+    if not draw_dates:
+        print(
+            f"ℹ️ No new draw dates found after {latest_known_date or 'no existing data'}; "
+            f"keeping {len(all_data)} cached rows."
+        )
+        return coerce_and_sort_rows([row for row in all_data.values()])
 
     for date in draw_dates:
-        if latest_known_date and date <= latest_known_date:
-            continue
         result = fetch_lottery_result(date)
         if result:
             extracted_data = extract_lottery_data(result)
