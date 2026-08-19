@@ -22,7 +22,7 @@ def fetch_csv_rows(csv_url):
             rows = list(csv.reader(StringIO(response.text)))
             if not rows or len(rows) < 2:
                 raise RuntimeError(f"No data rows found in CSV payload from {csv_url}")
-            header = [column.strip() for column in rows[0]]
+            header = [column.strip().lstrip("\ufeff") for column in rows[0]]
             if not REQUIRED_COLUMNS.issubset(set(header)):
                 raise RuntimeError(
                     f"CSV from {csv_url} is missing required columns."
