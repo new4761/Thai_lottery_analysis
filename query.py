@@ -1,6 +1,5 @@
 import csv
 import datetime
-import os
 import time
 import requests
 import re
@@ -12,6 +11,17 @@ API_URL = "https://www.glo.or.th/api/checking/getLotteryResult"
 REQUEST_TIMEOUT_SECONDS = 12
 REQUEST_RETRIES = 3
 REQUEST_RETRY_DELAY_SECONDS = 2
+PRIZE_WIDTHS = {
+    "first": 6,
+    "second": 6,
+    "third": 6,
+    "fourth": 6,
+    "fifth": 6,
+    "last2": 2,
+    "last3f": 3,
+    "last3b": 3,
+    "near1": 6,
+}
 
 
 # Get the list of draw dates based on the year and special conditions for May
@@ -76,8 +86,7 @@ def normalize_prize_value(prize_name, value):
     if not cleaned:
         return ""
 
-    target_width = {"last2": 2, "last3f": 3, "last3b": 3}
-    width = target_width.get(prize_name, 0)
+    width = PRIZE_WIDTHS.get(prize_name, 0)
     if width:
         return cleaned.zfill(width)
     return cleaned
@@ -86,10 +95,28 @@ def normalize_prize_value(prize_name, value):
 def validate_lottery_response(payload):
     if not isinstance(payload, dict):
         return False
+
     response = payload.get("response")
     result = response.get("result") if isinstance(response, dict) else None
     data = result.get("data") if isinstance(result, dict) else None
-    return isinstance(data, dict)
+    if not isinstance(data, dict):
+        return False
+
+    for prize_name, prize_payload in data.items():
+        if not isinstance(prize_payload, dict):
+            continue
+        numbers = prize_payload.get("number")
+        if numbers is None:
+            continue
+        if not isinstance(numbers, list):
+            return False
+        for number_entry in numbers:
+            if not isinstance(number_entry, dict):
+                return False
+            if "value" not in number_entry:
+                return False
+
+    return True
 
 
 def fetch_lottery_result(date):
@@ -111,6 +138,10 @@ def fetch_lottery_result(date):
             if validate_lottery_response(json_response):
                 return json_response
             print(f"⚠️ Invalid response schema for {date} (attempt {attempt}/{REQUEST_RETRIES})")
+            last_error = f"Invalid response schema for {date} (attempt {attempt}/{REQUEST_RETRIES})"
+            if attempt < REQUEST_RETRIES:
+                time.sleep(REQUEST_RETRY_DELAY_SECONDS * attempt)
+                continue
             return None
         except requests.RequestException as error:
             last_error = str(error)
