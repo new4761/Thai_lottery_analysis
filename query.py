@@ -4,6 +4,7 @@ import os
 import time
 import requests
 import re
+import io
 
 LOTTERY_RESULTS_FILE = "lottery_results.csv"
 LOTTERY_START_DATE = "2010-03-01"
@@ -291,12 +292,22 @@ def collect_all_data():
 
 # Save the collected data to a CSV file
 def save_to_csv(data, filename=LOTTERY_RESULTS_FILE):
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=FIELD_NAMES)
+    writer.writeheader()
+    for entry in data:
+        writer.writerow(entry)
+    serialized = output.getvalue()
+
+    if os.path.exists(filename):
+        with open(filename, "r", encoding="utf-8") as existing_file:
+            if existing_file.read() == serialized:
+                print("ℹ️ lottery_results.csv is already current; skipping write.")
+                return
+
     temp_filename = f"{filename}.tmp"
-    with open(temp_filename, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELD_NAMES)
-        writer.writeheader()
-        for entry in data:
-            writer.writerow(entry)
+    with open(temp_filename, "w", encoding="utf-8") as f:
+        f.write(serialized)
     os.replace(temp_filename, filename)
 
 
