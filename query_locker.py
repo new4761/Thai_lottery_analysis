@@ -1,11 +1,7 @@
+import csv
 import re
-import pandas as pd
 
-# 📥 Load the raw data with stable typing for lottery numbers
-df = pd.read_csv("lottery_results.csv", dtype=str).fillna("")
-
-# 🎯 Columns to extract
-prize_columns = ["first", "second", "third", "fourth", "fifth", "last2", "last3f", "last3b", "near1"]
+PRIZE_COLUMNS = ["first", "second", "third", "fourth", "fifth", "last2", "last3f", "last3b", "near1"]
 REQUIRED_COLUMNS = ["date", "first", "second", "third", "fourth", "fifth", "last2", "last3f", "last3b", "near1"]
 PRIZE_WIDTHS = {
     "first": 6,
@@ -38,8 +34,8 @@ def normalize_prize_value(prize_name, value):
     return cleaned
 
 
-def assert_required_columns(df):
-    missing = [column for column in REQUIRED_COLUMNS if column not in df.columns]
+def assert_required_columns(header):
+    missing = [col for col in REQUIRED_COLUMNS if col not in header]
     if missing:
         raise ValueError(f"Missing required lottery columns: {', '.join(missing)}")
 
@@ -56,35 +52,39 @@ def append_prize_records(records, row_date, prize, raw_values):
     for val in values.split(","):
         normalized = normalize_prize_value(prize, val.strip())
         if normalized:
-            records.append({
-                "date": row_date,
-                "prize_type": prize,
-                "number": normalized
-            })
+            records.append([row_date, prize, normalized])
 
 
-# 🔁 Flatten into long format
-records = []
-assert_required_columns(df)
-invalid_rows = 0
+def transform_lottery_data(input_filename, output_filename):
+    records = []
+    invalid_rows = 0
 
-for idx, row in df.iterrows():
-    if not is_iso_date(row["date"]):
-        invalid_rows += 1
-        continue
+    with open(input_filename, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        if reader.fieldnames is None:
+            raise ValueError(f"CSV {input_filename} has no header")
+        assert_required_columns(reader.fieldnames)
 
-    for prize in prize_columns:
-        append_prize_records(records, row["date"], prize, row[prize])
+        for row in reader:
+            if not is_iso_date(row.get("date", "")):
+                invalid_rows += 1
+                continue
 
-# 📊 Final Looker-friendly format
-df_looker = pd.DataFrame(records, columns=["date", "prize_type", "number"])
-if invalid_rows:
-    print(f"⚠️ Skipped {invalid_rows} rows in lottery_results.csv due invalid date format.")
-if df_looker.empty:
-    df_looker = pd.DataFrame(columns=["date", "prize_type", "number"])
-    print("⚠️ No lottery rows were available for Looker transform.")
+            for prize in PRIZE_COLUMNS:
+                append_prize_records(records, row["date"], prize, row.get(prize, ""))
 
-# 💾 Save to CSV
-df_looker = df_looker.sort_values(["date", "prize_type", "number"]).drop_duplicates()
-df_looker.to_csv("lottery_results_looker_ready.csv", index=False)
-print("✅ Looker-ready dataset saved as 'lottery_results_looker_ready.csv'")
+    if invalid_rows:
+        print(f"⚠️ Skipped {invalid_rows} rows in lottery_results.csv due invalid date format.")
+    if not records:
+        print("⚠️ No lottery rows were available for Looker transform.")
+
+    records.sort()
+    with open(output_filename, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["date", "prize_type", "number"])
+        writer.writerows(records)
+
+
+if __name__ == "__main__":
+    transform_lottery_data("lottery_results.csv", "lottery_results_looker_ready.csv")
+    print("✅ Looker-ready dataset saved as 'lottery_results_looker_ready.csv'")
