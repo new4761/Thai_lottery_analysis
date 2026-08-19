@@ -100,6 +100,28 @@ jobs:
         if: steps.lottery_after.outputs.changed == 'true'
         run: python query_locker.py
 
+      - name: 🧾 Compute Looker checksum
+        id: locker_after
+        if: steps.lottery_after.outputs.changed == 'true'
+        run: |
+          if [ -f lottery_results_looker_ready.csv ]; then
+            looker_hash=$(sha256sum lottery_results_looker_ready.csv | awk '{print $1}')
+            looker_rows=$(( $(wc -l < lottery_results_looker_ready.csv) - 1 ))
+          else
+            looker_hash="missing"
+            looker_rows="missing"
+          fi
+          echo "hash=$looker_hash" >> "$GITHUB_OUTPUT"
+          echo "rows=$looker_rows" >> "$GITHUB_OUTPUT"
+
+      - name: ⚠️ Validate transformed output
+        if: steps.lottery_after.outputs.changed == 'true'
+        run: |
+          if [ "${{ steps.locker_after.outputs.rows }}" = "0" ]; then
+            echo "Looker transformed output is empty, aborting sync to avoid publishing bad data."
+            exit 1
+          fi
+
       - name: 🔍 Show outputs
         if: steps.lottery_after.outputs.changed == 'true'
         run: |
@@ -150,6 +172,8 @@ jobs:
               "rows_added": "${{ steps.lottery_after.outputs.rows_added }}",
               "latest_before": "${{ steps.lottery_after.outputs.latest_before }}",
               "latest_after": "${{ steps.lottery_after.outputs.latest_after }}",
+              "looker_rows": "${{ steps.locker_after.outputs.rows }}",
+              "looker_csv_sha": "${{ steps.locker_after.outputs.hash }}",
               "lottery_results_csv_sha": "${{ steps.lottery_after.outputs.hash }}",
               "lottery_results_csv_sha_prev": "${{ steps.lottery_before.outputs.hash }}",
               "generated_at": "${{ steps.lottery_after.outputs.generated_at }}"

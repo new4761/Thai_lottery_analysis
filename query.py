@@ -9,6 +9,7 @@ LOTTERY_RESULTS_FILE = "lottery_results.csv"
 LOTTERY_START_DATE = "2010-03-01"
 FIELD_NAMES = ["date", "first", "second", "third", "fourth", "fifth", "last2", "last3f", "last3b", "near1"]
 API_URL = "https://www.glo.or.th/api/checking/getLotteryResult"
+RECOVERY_LOOKBACK_DAYS = 45
 CONNECT_TIMEOUT_SECONDS = 4
 READ_TIMEOUT_SECONDS = 12
 REQUEST_RETRIES = 3
@@ -241,7 +242,7 @@ def collect_all_data():
     start_date = LOTTERY_START_DATE
     if latest_known_date:
         # Re-check one draw cycle to recover from transient fetch misses.
-        resume_from = latest_known_date - datetime.timedelta(days=14)
+        resume_from = latest_known_date - datetime.timedelta(days=RECOVERY_LOOKBACK_DAYS)
         start_date_obj = datetime.datetime.strptime(LOTTERY_START_DATE, "%Y-%m-%d").date()
         start_date = max(start_date_obj, resume_from).strftime("%Y-%m-%d")
 
