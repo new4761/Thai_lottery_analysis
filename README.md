@@ -21,6 +21,32 @@
 4. Publishes results to Google Sheets
 5. Triggers new4761.github.io site rebuild
 
+**Manual backfill**: To recover a specific window (for example August), run workflow_dispatch with:
+```text
+start_date: YYYY-MM-DD
+end_date: YYYY-MM-DD
+overwrite_existing: true
+publish_updates: false
+```
+
+By default, manual backfills run without publishing to Google Sheets or triggering site deploy.
+Set `publish_updates: true` only when you want CI publication side effects.
+
+Or run locally to mimic CI behavior:
+```bash
+python query.py --start-date 2026-08-01 --end-date 2026-08-31 --overwrite-existing
+python query_locker.py
+python validators.py lottery_results.csv
+```
+
+Or use make:
+```bash
+make recover-range START_DATE=2026-08-01 END_DATE=2026-08-31
+make recover-month RECOVER_MONTH=2026-08
+make recover-august
+make check
+```
+
 **Requirements**:
 - Python 3.11+
 - `pip install -r requirements.txt`

@@ -7,6 +7,25 @@ on:
   schedule:
     - cron: '0 8 3,17 * *'  # Run at 15:00 Thailand time on 3rd and 17th
   workflow_dispatch:
+    inputs:
+      start_date:
+        description: "Manual start date (YYYY-MM-DD)"
+        required: false
+        type: string
+      end_date:
+        description: "Manual end date (YYYY-MM-DD)"
+        required: false
+        type: string
+      overwrite_existing:
+        description: "Overwrite rows in selected date range"
+        required: false
+        type: boolean
+        default: false
+      publish_updates:
+        description: "Also publish updates to Google Sheets and trigger site deploy"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -48,8 +67,31 @@ jobs:
           echo "rows=$previous_rows" >> "$GITHUB_OUTPUT"
           echo "latest_date=$previous_latest" >> "$GITHUB_OUTPUT"
 
+      - name: 🛠️ Build manual query args
+        id: query_args
+        run: |
+          query_args=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ -n "${{ github.event.inputs.start_date }}" ]; then
+              query_args="$query_args --start-date ${{ github.event.inputs.start_date }}"
+            fi
+            if [ -n "${{ github.event.inputs.end_date }}" ]; then
+              query_args="$query_args --end-date ${{ github.event.inputs.end_date }}"
+            fi
+            if [ "${{ github.event.inputs.overwrite_existing }}" = "true" ]; then
+              query_args="$query_args --overwrite-existing"
+            fi
+          fi
+          echo "args=$query_args" >> "$GITHUB_OUTPUT"
+
       - name: 📝 Run query.py (fetch data)
-        run: python query.py
+        run: |
+          if [ -n "${{ steps.query_args.outputs.args }}" ]; then
+            echo "Running: python query.py${{ steps.query_args.outputs.args }}"
+          else
+            echo "Running: python query.py"
+          fi
+          python query.py${{ steps.query_args.outputs.args }}
 
       - name: 🧾 Compute post-sync checksum
         id: lottery_after
@@ -167,7 +209,9 @@ jobs:
           fi
 
       - name: Trigger site sync via repository dispatch
-        if: steps.lottery_after.outputs.changed == 'true'
+        if: |
+          steps.lottery_after.outputs.changed == 'true' &&
+          (github.event_name != 'workflow_dispatch' || github.event.inputs.publish_updates == 'true')
         env:
           GH_TOKEN: ${{ secrets.NEW4761_SITE_DISPATCH_TOKEN }}
         run: |
@@ -210,7 +254,9 @@ jobs:
           echo "Triggered site sync for commit ${{ github.sha }}."
 
       - name: ✔️ Final validation before sheet publication
-        if: steps.lottery_after.outputs.changed == 'true'
+        if: |
+          steps.lottery_after.outputs.changed == 'true' &&
+          (github.event_name != 'workflow_dispatch' || github.event.inputs.publish_updates == 'true')
         run: |
           echo "Final validation before publishing to Google Sheets..."
           python validators.py lottery_results.csv "${{ steps.lottery_before.outputs.rows }}"
@@ -221,8 +267,57 @@ jobs:
           "
 
       - name: 🚀 Update Google Sheets from GitHub CSVs
-        if: steps.lottery_after.outputs.changed == 'true'
+        if: |
+          steps.lottery_after.outputs.changed == 'true' &&
+          (github.event_name != 'workflow_dispatch' || github.event.inputs.publish_updates == 'true')
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
         run: |
           python update_sheet_from_github.py
+
+      - name: 🧾 Build sync summary
+        if: always()
+        run: |
+          {
+            echo "# Lottery Sync Run Summary"
+            echo ""
+            echo "Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "Workflow: ${{ github.workflow }}"
+            echo "Event: ${{ github.event_name }}"
+            echo "Ref: ${{ github.ref }}"
+            echo "Commit: ${{ github.sha }}"
+            echo "Manual mode: ${{ github.event_name == 'workflow_dispatch' }}"
+            echo "Manual inputs:"
+            echo "  start_date=${{ github.event.inputs.start_date }}"
+            echo "  end_date=${{ github.event.inputs.end_date }}"
+            echo "  overwrite_existing=${{ github.event.inputs.overwrite_existing }}"
+            echo "  publish_updates=${{ github.event.inputs.publish_updates }}"
+            echo ""
+            echo "Lottery file:"
+            echo "  changed=${{ steps.lottery_after.outputs.changed }}"
+            echo "  change_reason=${{ steps.lottery_after.outputs.change_reason }}"
+            echo "  rows_before=${{ steps.lottery_before.outputs.rows }}"
+            echo "  rows_after=${{ steps.lottery_after.outputs.rows }}"
+            echo "  rows_added=${{ steps.lottery_after.outputs.rows_added }}"
+            echo "  latest_before=${{ steps.lottery_before.outputs.latest_date }}"
+            echo "  latest_after=${{ steps.lottery_after.outputs.latest_after }}"
+            echo "  hash_before=${{ steps.lottery_before.outputs.hash }}"
+            echo "  hash_after=${{ steps.lottery_after.outputs.hash }}"
+            echo "  query_generated_at=${{ steps.lottery_after.outputs.generated_at }}"
+            if [ -f lottery_results_looker_ready.csv ]; then
+              echo "Looker:"
+              echo "  rows=${{ steps.locker_after.outputs.rows }}"
+              echo "  hash=${{ steps.locker_after.outputs.hash }}"
+            else
+              echo "Looker: not available"
+            fi
+            echo ""
+          } > lottery_sync_summary.md
+
+      - name: 📦 Archive sync summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lottery-sync-summary-${{ github.run_id }}
+          path: lottery_sync_summary.md
+          retention-days: 30

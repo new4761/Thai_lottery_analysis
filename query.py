@@ -1,5 +1,6 @@
 import csv
 import datetime
+import argparse
 import os
 import time
 import requests
@@ -29,6 +30,9 @@ PRIZE_WIDTHS = {
 }
 MIN_DAILY_DRAWS = 2  # At least first and second prize per draw
 
+
+def parse_iso_date(value):
+    return datetime.datetime.strptime(value, "%Y-%m-%d").date()
 
 
 
@@ -284,17 +288,34 @@ def validate_dataset(rows, existing_rows):
 
 
 # Collect all the data for the dates
-def collect_all_data():
+def collect_all_data(start_date=None, end_date=None, overwrite_existing=False):
     existing_data = read_local_lottery_data(LOTTERY_RESULTS_FILE)
     latest_known_date = get_latest_local_draw_date(existing_data)
 
     all_data = {row["date"]: row for row in existing_data if row.get("date")}
-    today = datetime.date.today()
-    draw_dates = get_pending_draw_dates(latest_known_date, today)
+    reference_date = end_date or datetime.date.today()
+
+    if start_date is not None:
+        draw_dates = get_draw_dates(start_date, reference_date)
+        if not overwrite_existing and latest_known_date:
+            draw_dates = [date for date in draw_dates if date > latest_known_date]
+            skipped_range = [date for date in get_draw_dates(start_date, reference_date) if date <= latest_known_date]
+            if skipped_range:
+                skipped_start = skipped_range[0].isoformat()
+                skipped_end = skipped_range[-1].isoformat()
+                print(
+                    f"⚠️ Manual range includes already-known dates from {skipped_start} to {skipped_end} "
+                    f"({len(skipped_range)} rows skipped)."
+                )
+                print("   Use --overwrite-existing to refresh them too.")
+        source_note = "manual-range"
+    else:
+        draw_dates = get_pending_draw_dates(latest_known_date, reference_date)
+        source_note = "incremental"
 
     if not draw_dates:
         print(
-            f"ℹ️ No new draw dates found after {latest_known_date or 'no existing data'}; "
+            f"ℹ️ No draw dates to process from {source_note} source; "
             f"keeping {len(all_data)} cached rows."
         )
         return coerce_and_sort_rows([row for row in all_data.values()])
@@ -313,7 +334,7 @@ def collect_all_data():
 
     if not all_data:
         raise RuntimeError(
-            f"❌ Fatal: No rows were saved from API for any pending date through {today.isoformat()}. "
+            f"❌ Fatal: No rows were saved from API for any pending date through {reference_date.isoformat()}. "
             "Unable to proceed without data. Existing lottery_results.csv will remain unchanged by this failed sync."
         )
 
@@ -349,6 +370,40 @@ def save_to_csv(data, filename=LOTTERY_RESULTS_FILE):
 
 # Run the script
 if __name__ == "__main__":
-    data = collect_all_data()
+    parser = argparse.ArgumentParser(description="Fetch and refresh Thai lottery results.")
+    parser.add_argument(
+        "--start-date",
+        dest="start_date",
+        type=parse_iso_date,
+        help="Optional YYYY-MM-DD date to start fetching (manual backfill/re-sync window)",
+    )
+    parser.add_argument(
+        "--end-date",
+        dest="end_date",
+        type=parse_iso_date,
+        help="Optional YYYY-MM-DD date to stop fetching (manual backfill/re-sync window)",
+    )
+    parser.add_argument(
+        "--overwrite-existing",
+        action="store_true",
+        help="Overwrite rows that already exist in the requested date range",
+    )
+    args = parser.parse_args()
+
+    if args.start_date and args.end_date and args.start_date > args.end_date:
+        raise ValueError("start-date must be before or equal to end-date")
+
+    if args.start_date and args.start_date > datetime.date.today():
+        raise ValueError("start-date cannot be in the future")
+
+    if args.end_date and args.end_date > datetime.date.today():
+        print("⚠️ end-date is in the future. Clamping to today's date.")
+        args.end_date = datetime.date.today()
+
+    data = collect_all_data(
+        start_date=args.start_date,
+        end_date=args.end_date,
+        overwrite_existing=args.overwrite_existing,
+    )
     save_to_csv(data)
     print("✅ Done! Data saved to lottery_results.csv")
