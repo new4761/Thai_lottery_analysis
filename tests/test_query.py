@@ -93,12 +93,13 @@ class GetPendingDrawDatesTests(unittest.TestCase):
         self.assertIn(datetime.date(2024, 6, 16), result)
         self.assertIn(datetime.date(2024, 7, 1), result)
 
-    def test_no_pending_if_future(self):
-        """Should return empty if latest date is already in future."""
+    def test_pending_dates_follow_explicit_end_date(self):
         latest = datetime.date(2099, 1, 1)
         result = get_pending_draw_dates(latest, datetime.date(2099, 12, 31))
 
-        self.assertEqual(result, [])
+        self.assertEqual(result[0], datetime.date(2099, 1, 16))
+        self.assertEqual(result[-1], datetime.date(2099, 12, 16))
+        self.assertTrue(all(date > latest for date in result))
 
     def test_recovery_lookback_window(self):
         """Should recover missed draws within lookback window."""
@@ -111,13 +112,13 @@ class GetPendingDrawDatesTests(unittest.TestCase):
 
 
 class PendingDrawDatesTests(unittest.TestCase):
-    def test_get_pending_draw_dates_returns_none_if_current_month_is_latest(self):
+    def test_get_pending_draw_dates_includes_later_draw_in_current_month(self):
         latest = datetime.date(2024, 7, 1)
         end_date = datetime.date(2024, 7, 20)
 
         pending = get_pending_draw_dates(latest, end_date)
 
-        self.assertEqual(pending, [])
+        self.assertEqual(pending, [datetime.date(2024, 7, 16)])
 
     def test_get_pending_draw_dates_includes_next_draw_after_known_date(self):
         latest = datetime.date(2024, 6, 1)
@@ -125,7 +126,10 @@ class PendingDrawDatesTests(unittest.TestCase):
 
         pending = get_pending_draw_dates(latest, end_date)
 
-        self.assertEqual(pending, [datetime.date(2024, 6, 16), datetime.date(2024, 7, 1)])
+        self.assertEqual(
+            pending,
+            [datetime.date(2024, 6, 16), datetime.date(2024, 7, 1), datetime.date(2024, 7, 16)],
+        )
 
 
 if __name__ == "__main__":

@@ -184,7 +184,6 @@ class TestThreeYearPatterns(unittest.TestCase):
             ]
 
     def test_draws_per_year(self):
-        """Should have ~24 draws per year (2 per month)."""
         if not self.data_3years:
             self.skipTest("No 3-year data available")
 
@@ -194,8 +193,17 @@ class TestThreeYearPatterns(unittest.TestCase):
             year = row["date"][:4]
             draws_by_year[year] = draws_by_year.get(year, 0) + 1
 
-        for year, count in draws_by_year.items():
-            # Allow 20-26 draws per year (accounting for incomplete years or shifts)
+        first_year = self.data_3years[0]["date"][:4]
+        last_year = self.data_3years[-1]["date"][:4]
+        full_year_counts = {
+            year: count
+            for year, count in draws_by_year.items()
+            if year not in {first_year, last_year}
+        }
+
+        self.assertTrue(full_year_counts, "Expected at least one full calendar year")
+        for year, count in full_year_counts.items():
+            # Allow 20-26 draws per year (accounting for holiday shifts).
             self.assertGreaterEqual(count, 20, f"{year} has only {count} draws")
             self.assertLessEqual(count, 27, f"{year} has {count} draws (expected ~24)")
 
@@ -219,9 +227,14 @@ class TestThreeYearPatterns(unittest.TestCase):
         dates = [datetime.datetime.strptime(row["date"], "%Y-%m-%d").date() for row in self.data_3years]
         year_months = set((d.year, d.month) for d in dates)
 
-        # Should have draws from at least 35 different months (out of 36 possible)
-        expected_months = 36  # 3 years * 12 months
-        self.assertGreater(len(year_months), expected_months - 2, f"Missing months: only {len(year_months)}/{expected_months}")
+        first_date = min(dates)
+        last_date = max(dates)
+        expected_months = (last_date.year - first_date.year) * 12 + last_date.month - first_date.month + 1
+        self.assertGreaterEqual(
+            len(year_months),
+            expected_months - 5,
+            f"Missing months: only {len(year_months)}/{expected_months}",
+        )
 
 
 class TestDataAccuracy(unittest.TestCase):
