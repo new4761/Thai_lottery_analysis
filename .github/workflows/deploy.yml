@@ -40,14 +40,14 @@ jobs:
         run: |
           python -c "
           from data_analysis import LotteryDataAnalysis
-          from validators import validate_csv_schema, validate_csv_integrity
+          from validators import validate_csv_schema, validate_csv_integrity, validate_looker_csv
 
           print('Validating lottery_results.csv...')
           validate_csv_schema('lottery_results.csv')
           validate_csv_integrity('lottery_results.csv')
 
           print('Validating lottery_results_looker_ready.csv...')
-          validate_csv_schema('lottery_results_looker_ready.csv')
+          validate_looker_csv('lottery_results_looker_ready.csv')
 
           print('✅ All validations passed!')
           "
