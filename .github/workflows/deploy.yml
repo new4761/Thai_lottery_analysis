@@ -129,11 +129,11 @@ jobs:
           echo "Next automatic deployment: 3rd/17th of next month"
 
       - name: Comment on latest commit
-        uses: actions/github-script@v6
+        uses: actions/github-script@v9
         if: github.event_name == 'push'
         with:
           script: |
-            github.rest.git.createCommitComment({
+            await github.request('POST /repos/{owner}/{repo}/commits/{commit_sha}/comments', {
               owner: context.repo.owner,
               repo: context.repo.repo,
               commit_sha: context.sha,
